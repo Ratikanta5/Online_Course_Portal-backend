@@ -26,6 +26,11 @@ module.exports.register = async (req, res) => {
     role: role || "student",
   });
 
+  const {id} = newUser
+
+  // console.log(newUser.id);
+  
+
   if(req.file){
     newUser.profileImage = {
       url : req.file.path,
@@ -35,18 +40,18 @@ module.exports.register = async (req, res) => {
 
 
 //this token for verification of email.
-  const verificationToken = jwt.sign(
-    { id: newUser._id },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" } // expires in 1 day
-  );
+  // const verificationToken = jwt.sign(
+  //   { id: newUser._id },
+  //   process.env.JWT_SECRET,
+  //   { expiresIn: "1d" } // expires in 1 day
+  // );
 
 
-  newUser.verificationToken = verificationToken;
+  // newUser.verificationToken = verificationToken;
   
   await newUser.save();
 
-  const verifyLink = `${process.env.BACKEND_URL}/verify/${verificationToken}`;
+  const verifyLink = `${process.env.BACKEND_URL}/verify/${id}`;
 
   // prepare HTML message
   const message = `
@@ -67,12 +72,12 @@ module.exports.register = async (req, res) => {
 };
 
 module.exports.verifyEmail = async (req, res) => {
-  const { token } = req.params;
-  if (!token) throw new ExpressError(400, "Verification token missing");
+  const { val } = req.params;
+  if (!val) throw new ExpressError(400, "Verification token missing");
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-  const user = await User.findById(decoded.id);
+  const user = await User.findById({_id:val});
+  
   if (!user) throw new ExpressError(404, "User not found");
 
   //check if already verfified

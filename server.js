@@ -22,7 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/lecturer", lectureRoutes)
 
-app.use("/api/student", studentRoutes)
+// app.use("/api/student", studentRoutes)
 
 
 app.get("/",(req,res)=>{
