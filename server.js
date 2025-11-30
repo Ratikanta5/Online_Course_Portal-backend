@@ -4,6 +4,7 @@ if(process.env.NODE_ENV != "production"){
 
 const express = require('express');
 const app = express();
+const cors = require('cors');
 const connectDB = require('./config/db/connectDB');
 const authRoutes = require('./routes/authRoutes');
 const lectureRoutes = require('./routes/lecturerRoutes');
@@ -15,7 +16,7 @@ connectDB();
 
 
 app.use(express.json());
-
+app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 
 
