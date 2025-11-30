@@ -126,7 +126,6 @@ module.exports.login = async (req, res) => {
 
   // Send token + user info
   res.status(200).json({
-    authToken,
     user: {
       id: user._id,
       name: user.name,
