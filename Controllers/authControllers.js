@@ -39,14 +39,6 @@ module.exports.register = async (req, res) => {
   }
 
 
-//this token for verification of email.
-  // const verificationToken = jwt.sign(
-  //   { id: newUser._id },
-  //   process.env.JWT_SECRET,
-  //   { expiresIn: "1d" } // expires in 1 day
-  // );
-
-
   // newUser.verificationToken = verificationToken;
   
   await newUser.save();

@@ -19,6 +19,10 @@ const courseSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: "Review",
   }],
+  category:{
+    type: String,
+    required: true
+  },
   price: {
     type: Number,
     required: true,

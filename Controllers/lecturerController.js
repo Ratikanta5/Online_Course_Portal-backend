@@ -6,9 +6,9 @@ const cloudinary = require("cloudinary").v2;
 
 //add new course
 module.exports.addCourse = async (req, res) => {
-  const { title, description, price } = req.body;
+  const { title, description, price, category } = req.body;
 
-  if (!title || !description || !price) {
+  if (!title || !description || !price || !category) {
     throw new ExpressError(400, "Title, description, and price are required");
   }
 
