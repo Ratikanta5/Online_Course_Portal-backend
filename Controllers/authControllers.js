@@ -136,6 +136,14 @@ module.exports.login = async (req, res) => {
   });
 };
 
+module.exports.me=async(req, res)=>{
+  const {val} = req.params
+  
+  const userDetails = await User.findOne({id:val.id,role:val.role})
+  res.json({});
+
+}
+
 
 module.exports.protected = async(req , res) =>{
    res.status(200).json({
