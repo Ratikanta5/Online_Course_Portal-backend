@@ -137,13 +137,52 @@ module.exports.login = async (req, res) => {
   });
 };
 
-// module.exports.me=async(req, res)=>{
-//   const {val} = req.params
-  
-//   const userDetails = await User.findOne({id:val.id,role:val.role})
-//   res.json({});
+// GET /api/auth/me
+module.exports.me = async (req, res) => {
+  try {
+    const { id, role } = req.query;
 
-// }
+    if (!id || !role) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing id or role",
+      });
+    }
+
+    // Find user but hide private fields
+    const user = await User.findById(id).select(
+      "-password -verificationToken -verificationTokenExpiry"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Extra safety check: role match
+    if (user.role !== role) {
+      return res.status(400).json({
+        success: false,
+        message: "Role mismatch",
+      });
+    }
+
+    return res.json({
+      success: true,
+      user,
+    });
+
+  } catch (err) {
+    console.error("Error in /me:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
 
 
 module.exports.protected = async(req , res) =>{

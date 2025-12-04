@@ -12,7 +12,7 @@ const upload = multer({ storage });
 router.post("/register",upload.single("profileImage"), wrapAsync(authController.register));
 router.post("/verify/:token", wrapAsync(authController.verifyEmail));
 router.post("/login",wrapAsync(authController.login));
-router.get("/me/:val",wrapAsync(authController.me))
+router.get("/me",wrapAsync(authController.me))
 router.get("/protected", verifyToken , authorizeRole("user"),  wrapAsync(authController.protected));
 
 
