@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 const User = require("../models/User");
 const ExpressError = require("../utills/ExpressError");
 const sendEmail = require("../config/email/email");
@@ -8,7 +9,6 @@ const verifyToken = require("../middlewares/authMiddleware");
 module.exports.register = async (req, res) => {
   const { name, email, password, bio, role } = req.body;
 
-  const hashedPassword = await bcrypt.hash(password, 10);
 
   if (role === "admin") {
     throw new ExpressError(403, "you have no access to admin");
@@ -17,6 +17,9 @@ module.exports.register = async (req, res) => {
   const existingUser = await User.findOne({ email });
   if (existingUser) throw new ExpressError(400, "Email already registered");
 
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const verificationToken = crypto.randomBytes(32).toString("hex"); // unique token
+
 
   const newUser = new User({
     name,
@@ -24,11 +27,8 @@ module.exports.register = async (req, res) => {
     password: hashedPassword,
     bio,
     role: role || "student",
+    verificationToken,
   });
-
-  const {id} = newUser
-
-  // console.log(newUser.id);
   
 
   if(req.file){
@@ -43,7 +43,7 @@ module.exports.register = async (req, res) => {
   
   await newUser.save();
 
-  const verifyLink = `${process.env.BACKEND_URL}/verify/${id}`;
+  const verifyLink = `${process.env.FRONTEND_URL}/verify/${verificationToken}`;
 
   // prepare HTML message
   const message = `
@@ -64,15 +64,13 @@ module.exports.register = async (req, res) => {
 };
 
 module.exports.verifyEmail = async (req, res) => {
-  const { val } = req.params;
-  if (!val) throw new ExpressError(400, "Verification token missing");
+  const { token } = req.params;
+  if (!token) throw new ExpressError(400, "Verification token missing");
 
+  const user = await User.findOne({ verificationToken: token });
 
-  const user = await User.findById({_id:val});
-  
-  if (!user) throw new ExpressError(404, "User not found");
+  if (!user) throw new ExpressError(404, "Invalid or expired verification token");
 
-  //check if already verfified
   if (user.isVerified) {
     return res.status(200).json({
       success: true,
@@ -80,13 +78,15 @@ module.exports.verifyEmail = async (req, res) => {
     });
   }
 
-  //Mark as verified
+  // Mark as verified & remove token
   user.isVerified = true;
+  // user.verificationToken = undefined;
+  user.verificationTokenExpiry = undefined; // prevent TTL deletion
   await user.save();
 
   return res.status(200).json({
     success: true,
-    message: "Email verified successfully!",
+    message: "Email verified successfully! You can now log in.",
     verifiedUser: {
       id: user._id,
       name: user.name,
@@ -96,6 +96,7 @@ module.exports.verifyEmail = async (req, res) => {
     },
   });
 };
+
 
 module.exports.login = async (req, res) => {
   let { email, password } = req.body;
@@ -136,13 +137,13 @@ module.exports.login = async (req, res) => {
   });
 };
 
-module.exports.me=async(req, res)=>{
-  const {val} = req.params
+// module.exports.me=async(req, res)=>{
+//   const {val} = req.params
   
-  const userDetails = await User.findOne({id:val.id,role:val.role})
-  res.json({});
+//   const userDetails = await User.findOne({id:val.id,role:val.role})
+//   res.json({});
 
-}
+// }
 
 
 module.exports.protected = async(req , res) =>{

@@ -21,7 +21,13 @@ const userSchema = new Schema({
     },
     verificationToken: { 
         type: String 
-    }, 
+    },
+  // TTL field only works if the user is not verified
+    verificationTokenExpiry: {
+        type: Date,
+        default: () => Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+        index: { expires: 0 }, // MongoDB TTL
+    },
     bio:{
         type: String,
     },
