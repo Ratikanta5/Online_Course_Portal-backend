@@ -127,11 +127,14 @@ module.exports.login = async (req, res) => {
 
   // Send token + user info
   res.status(200).json({
+    success: true,
+    message: "Login successful",
+    token: authToken, 
     user: {
       id: user._id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
     }
 
   });
