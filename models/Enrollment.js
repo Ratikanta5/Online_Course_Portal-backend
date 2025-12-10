@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+﻿const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
 const enrolledSchema = new Schema(
@@ -22,6 +22,10 @@ const enrolledSchema = new Schema(
       type: String,
       enum: ["pending", "success", "reject"],
       default: "pending",
+    },
+    stripePaymentIntentId: {
+      type: String,
+      default: null,
     },
   },
   { timestamps: true }

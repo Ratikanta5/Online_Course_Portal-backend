@@ -9,6 +9,7 @@ const connectDB = require('./config/db/connectDB');
 const authRoutes = require('./routes/authRoutes');
 const lectureRoutes = require('./routes/lecturerRoutes');
 const courseRoutes = require('./routes/courseRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 // const studentRoutes = require('./routes/studentRoutes');
 
 connectDB();
@@ -22,10 +23,9 @@ app.use(express.urlencoded({ extended: true }));
 
 
 app.use("/api/auth", authRoutes);
-app.use("/api/lecturer", lectureRoutes)
-
+app.use("/api/lecturer", lectureRoutes);
 app.use("/api/courses", courseRoutes);
-
+app.use("/api/payment", paymentRoutes);
 // app.use("/api/student", studentRoutes)
 
 
