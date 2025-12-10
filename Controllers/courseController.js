@@ -1,4 +1,4 @@
-const Course = require("../models/Course");
+﻿const Course = require("../models/Course");
 const Topic = require("../models/Topic");
 const User = require("../models/User");
 
@@ -14,6 +14,29 @@ module.exports.getVerifiedCourse = async (req, res) => {
           localField: "_id",
           foreignField: "courseId",
           as: "topics",
+        },
+      },
+      {
+        $addFields: {
+          topics: {
+            $map: {
+              input: "$topics",
+              as: "topic",
+              in: {
+                _id: "$$topic._id",
+                title: "$$topic.title",
+                description: "$$topic.description",
+                topicStatus: "$$topic.topicStatus",
+                lectures: {
+                  $filter: {
+                    input: "$$topic.lectures",
+                    as: "lecture",
+                    cond: { $eq: ["$$lecture.status", "approved"] },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       {
