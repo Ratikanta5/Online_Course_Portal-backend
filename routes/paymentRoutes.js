@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const paymentController = require("../Controllers/paymentController");
 const verifyToken = require("../middlewares/authMiddleware");
@@ -33,4 +33,11 @@ router.post(
   wrapAsync(paymentController.handleStripeWebhook)
 );
 
+router.get(
+  "/my-enrollments",
+  verifyToken,
+  wrapAsync(paymentController.getMyEnrollments)
+);
+
 module.exports = router;
+

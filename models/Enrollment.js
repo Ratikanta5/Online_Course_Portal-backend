@@ -1,4 +1,4 @@
-﻿const mongoose = require("mongoose");
+const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
 const enrolledSchema = new Schema(
@@ -18,15 +18,43 @@ const enrolledSchema = new Schema(
       enum: ["pending", "success"],
       default: "pending",
     },
-    isApproved: {
-      type: String,
-      enum: ["pending", "success", "reject"],
-      default: "pending",
-    },
     stripePaymentIntentId: {
       type: String,
       default: null,
     },
+    // Progress tracking fields
+    completedLectures: [
+      {
+        topicIndex: Number,
+        lectureIndex: Number,
+        completedAt: { type: Date, default: Date.now }
+      }
+    ],
+    videoProgress: {
+      type: Map,
+      of: {
+        currentTime: Number,
+        duration: Number,
+        lastAccessedAt: Date
+      },
+      default: new Map()
+    },
+    currentTopicIndex: {
+      type: Number,
+      default: 0
+    },
+    currentLectureIndex: {
+      type: Number,
+      default: 0
+    },
+    progressPercentage: {
+      type: Number,
+      default: 0
+    },
+    lastAccessedAt: {
+      type: Date,
+      default: Date.now
+    }
   },
   { timestamps: true }
 );

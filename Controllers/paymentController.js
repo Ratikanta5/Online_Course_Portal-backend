@@ -1,24 +1,21 @@
-﻿const Stripe = require("stripe");
+const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const Course = require("../models/Course");
 const Enrollment = require("../models/Enrollment");
-const User = require("../models/User");
+const ExpressError = require("../utills/ExpressError");
 
-// Step 1: Create Checkout Session
-module.exports.createCheckoutSession = async (req, res) => {
+// Create Payment Intent
+module.exports.createPaymentIntent = async (req, res) => {
   try {
     const studentId = req.user.id;
     const { courseId } = req.body;
 
-    console.log("Creating checkout session for student:", studentId, "Course:", courseId);
+    console.log("Creating payment intent for student:", studentId, "Course:", courseId);
 
     // Validate course exists
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Course not found"
-      });
+      throw new ExpressError(404, "Course not found");
     }
 
     console.log("Course found:", course.title, "Price:", course.price);
@@ -28,40 +25,25 @@ module.exports.createCheckoutSession = async (req, res) => {
       userId: studentId,
       courseId,
     });
+    
     if (existingEnrollment) {
-      return res.status(400).json({
-        success: false,
-        message: "You are already enrolled in this course"
-      });
+      throw new ExpressError(400, "You are already enrolled in this course");
     }
 
-    // Create Stripe Checkout Session (hosted payment page)
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "inr",
-            product_data: {
-              name: course.title,
-              description: course.description,
-              images: [course.courseImage],
-            },
-            unit_amount: Math.round(course.price * 100), // Convert to paise
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      success_url: `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+    // Create payment intent with Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(course.price * 100), // Convert to paise for INR
+      currency: "inr",
+      automatic_payment_methods: {
+        enabled: true,
+      },
       metadata: {
         studentId: studentId.toString(),
         courseId: courseId.toString(),
       },
     });
 
-    console.log("Checkout session created:", session.id);
+    console.log("Payment intent created:", paymentIntent.id);
 
     // Create enrollment record with pending payment
     const enrollment = new Enrollment({
@@ -69,42 +51,41 @@ module.exports.createCheckoutSession = async (req, res) => {
       courseId,
       payment: "pending",
       isApproved: "pending",
-      stripeSessionId: session.id,
+      stripePaymentIntentId: paymentIntent.id,
     });
+    
     await enrollment.save();
-
     console.log("Enrollment created:", enrollment._id);
 
     return res.status(200).json({
       success: true,
-      sessionId: session.id,
-      url: session.url,
+      clientSecret: paymentIntent.client_secret,
       enrollmentId: enrollment._id,
+      amount: course.price,
+      courseName: course.title,
+      courseImage: course.courseImage,
     });
   } catch (error) {
-    console.error("Error creating checkout session:", error);
+    console.error("Error creating payment intent:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to create payment session"
+      message: error.message || "Failed to create payment intent"
     });
   }
 };
 
-// Step 2: Verify Payment (called after successful payment)
-module.exports.verifyPayment = async (req, res) => {
+// Confirm Payment
+module.exports.confirmPayment = async (req, res) => {
   try {
-    const { sessionId, enrollmentId } = req.body;
+    const { paymentIntentId, enrollmentId } = req.body;
 
-    console.log("Verifying payment for session:", sessionId);
+    console.log("Confirming payment for intent:", paymentIntentId);
 
-    // Retrieve session from Stripe
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    // Retrieve payment intent from Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-    if (session.payment_status !== "paid") {
-      return res.status(400).json({
-        success: false,
-        message: "Payment not completed"
-      });
+    if (paymentIntent.status !== "succeeded") {
+      throw new ExpressError(400, "Payment was not successful");
     }
 
     // Update enrollment to success
@@ -115,29 +96,26 @@ module.exports.verifyPayment = async (req, res) => {
     );
 
     if (!enrollment) {
-      return res.status(404).json({
-        success: false,
-        message: "Enrollment not found"
-      });
+      throw new ExpressError(404, "Enrollment not found");
     }
 
-    console.log("Payment verified and enrollment updated:", enrollment._id);
+    console.log("Payment confirmed, enrollment updated:", enrollment._id);
 
     return res.status(200).json({
       success: true,
-      message: "Payment verified! Enrollment confirmed.",
+      message: "Payment successful! Enrollment confirmed.",
       enrollment,
     });
   } catch (error) {
-    console.error("Error verifying payment:", error);
+    console.error("Error confirming payment:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to verify payment"
+      message: error.message || "Failed to confirm payment"
     });
   }
 };
 
-// Step 3: Handle Stripe Webhook
+// Handle Stripe Webhook
 module.exports.handleStripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
 
@@ -148,25 +126,25 @@ module.exports.handleStripeWebhook = async (req, res) => {
       process.env.STRIPE_WEBHOOK_SECRET
     );
 
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      
+    if (event.type === "payment_intent.succeeded") {
+      const paymentIntent = event.data.object;
+
       await Enrollment.findOneAndUpdate(
-        { stripeSessionId: session.id },
+        { stripePaymentIntentId: paymentIntent.id },
         { payment: "success" }
       );
 
-      console.log("Webhook: Payment completed for session:", session.id);
+      console.log("Webhook: Payment succeeded:", paymentIntent.id);
     }
 
     res.json({ received: true });
   } catch (error) {
     console.error("Webhook error:", error.message);
-    res.status(400).send(`Webhook Error: ${error.message}`);
+    return res.status(400).send(`Webhook Error: ${error.message}`);
   }
 };
 
-// Step 4: Get Enrollment Status
+// Get Enrollment Status
 module.exports.getEnrollmentStatus = async (req, res) => {
   try {
     const studentId = req.user.id;
@@ -200,3 +178,37 @@ module.exports.getEnrollmentStatus = async (req, res) => {
     });
   }
 };
+// Get My Enrollments (for student dashboard)
+module.exports.getMyEnrollments = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    const enrollments = await Enrollment.find({ userId: studentId })
+      .populate('courseId')
+      .populate('userId', 'name email')
+      .sort({ createdAt: -1 });
+
+    // Map payment field to paymentStatus for frontend compatibility
+    const formattedEnrollments = enrollments.map(enrollment => ({
+      _id: enrollment._id,
+      courseId: enrollment.courseId,
+      paymentStatus: enrollment.payment,
+      isApproved: enrollment.isApproved,
+      createdAt: enrollment.createdAt,
+      updatedAt: enrollment.updatedAt
+    }));
+
+    return res.status(200).json({
+      success: true,
+      enrollments: formattedEnrollments,
+      count: formattedEnrollments.length
+    });
+  } catch (error) {
+    console.error("Error fetching enrollments:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch enrollments"
+    });
+  }
+};
+
