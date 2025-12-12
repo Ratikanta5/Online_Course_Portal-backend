@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+﻿const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
 const enrolledSchema = new Schema(
@@ -21,6 +21,19 @@ const enrolledSchema = new Schema(
     stripePaymentIntentId: {
       type: String,
       default: null,
+    },
+    // Revenue tracking
+    coursePrice: {
+      type: Number,
+      default: 0,
+    },
+    adminCommission: {
+      type: Number,
+      default: 0, // 20% of course price
+    },
+    lecturerEarning: {
+      type: Number,
+      default: 0, // 80% of course price
     },
     // Progress tracking fields
     completedLectures: [

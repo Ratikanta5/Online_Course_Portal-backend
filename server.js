@@ -1,4 +1,4 @@
-if(process.env.NODE_ENV != "production"){
+﻿if(process.env.NODE_ENV != "production"){
     require('dotenv').config()
 }
 
@@ -11,6 +11,8 @@ const lectureRoutes = require('./routes/lecturerRoutes');
 const courseRoutes = require('./routes/courseRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const progressRoutes = require('./routes/progressRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 // const studentRoutes = require('./routes/studentRoutes');
 
 connectDB();
@@ -28,6 +30,8 @@ app.use("/api/lecturer", lectureRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/progress", progressRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/admin", adminRoutes);
 // app.use("/api/student", studentRoutes)
 
 

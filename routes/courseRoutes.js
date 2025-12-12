@@ -6,6 +6,6 @@ const verifyToken = require('../middlewares/authMiddleware');
 const authorizeRole = require('../middlewares/roleMiddleware');
 
 
-router.get("/",verifyToken, authorizeRole("student","lecture"), wrapAsync(courseController.getVerifiedCourse));
+router.get("/",  wrapAsync(courseController.getVerifiedCourse));
 
 module.exports = router;

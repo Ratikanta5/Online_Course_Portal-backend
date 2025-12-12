@@ -1,6 +1,7 @@
 ﻿const Course = require("../models/Course");
 const Topic = require("../models/Topic");
 const User = require("../models/User");
+const Review = require("../models/Review");
 
 module.exports.getVerifiedCourse = async (req, res) => {
   try {
@@ -49,6 +50,26 @@ module.exports.getVerifiedCourse = async (req, res) => {
       },
       { $unwind: "$creator" },
       {
+        $lookup: {
+          from: "reviews",
+          localField: "_id",
+          foreignField: "course",
+          as: "reviewsData",
+        },
+      },
+      {
+        $addFields: {
+          averageRating: {
+            $cond: {
+              if: { $gt: [{ $size: "$reviewsData" }, 0] },
+              then: { $avg: "$reviewsData.rating" },
+              else: 0,
+            },
+          },
+          totalReviews: { $size: "$reviewsData" },
+        },
+      },
+      {
         $project: {
           title: 1,
           description: 1,
@@ -58,6 +79,8 @@ module.exports.getVerifiedCourse = async (req, res) => {
           courseImage: 1,
           topics: 1,
           createdAt: 1,
+          averageRating: 1,
+          totalReviews: 1,
         },
       },
     ]);
@@ -67,3 +90,4 @@ module.exports.getVerifiedCourse = async (req, res) => {
     return res.json({ success: false, message: error.message });
   }
 };
+

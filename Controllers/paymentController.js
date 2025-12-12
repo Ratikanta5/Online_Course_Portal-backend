@@ -25,7 +25,7 @@ module.exports.createPaymentIntent = async (req, res) => {
       userId: studentId,
       courseId,
     });
-    
+
     if (existingEnrollment) {
       throw new ExpressError(400, "You are already enrolled in this course");
     }
@@ -45,15 +45,21 @@ module.exports.createPaymentIntent = async (req, res) => {
 
     console.log("Payment intent created:", paymentIntent.id);
 
+    // Calculate commission (20% admin, 80% lecturer)
+    const adminCommission = course.price * 0.2;
+    const lecturerEarning = course.price * 0.8;
+
     // Create enrollment record with pending payment
     const enrollment = new Enrollment({
       userId: studentId,
       courseId,
       payment: "pending",
-      isApproved: "pending",
+      coursePrice: course.price,
+      adminCommission: adminCommission,
+      lecturerEarning: lecturerEarning,
       stripePaymentIntentId: paymentIntent.id,
     });
-    
+
     await enrollment.save();
     console.log("Enrollment created:", enrollment._id);
 
@@ -64,6 +70,11 @@ module.exports.createPaymentIntent = async (req, res) => {
       amount: course.price,
       courseName: course.title,
       courseImage: course.courseImage,
+      breakdown: {
+        totalPrice: course.price,
+        adminCommission: adminCommission,
+        lecturerEarning: lecturerEarning,
+      }
     });
   } catch (error) {
     console.error("Error creating payment intent:", error);
@@ -93,7 +104,9 @@ module.exports.confirmPayment = async (req, res) => {
       enrollmentId,
       { payment: "success" },
       { new: true }
-    );
+    )
+      .populate('courseId', 'title price')
+      .populate('userId', 'name email');
 
     if (!enrollment) {
       throw new ExpressError(404, "Enrollment not found");
@@ -105,6 +118,11 @@ module.exports.confirmPayment = async (req, res) => {
       success: true,
       message: "Payment successful! Enrollment confirmed.",
       enrollment,
+      revenue: {
+        totalAmount: enrollment.coursePrice,
+        adminEarned: enrollment.adminCommission,
+        lecturerEarned: enrollment.lecturerEarning,
+      }
     });
   } catch (error) {
     console.error("Error confirming payment:", error);
@@ -178,6 +196,7 @@ module.exports.getEnrollmentStatus = async (req, res) => {
     });
   }
 };
+
 // Get My Enrollments (for student dashboard)
 module.exports.getMyEnrollments = async (req, res) => {
   try {
@@ -193,7 +212,9 @@ module.exports.getMyEnrollments = async (req, res) => {
       _id: enrollment._id,
       courseId: enrollment.courseId,
       paymentStatus: enrollment.payment,
-      isApproved: enrollment.isApproved,
+      coursePrice: enrollment.coursePrice,
+      adminCommission: enrollment.adminCommission,
+      lecturerEarning: enrollment.lecturerEarning,
       createdAt: enrollment.createdAt,
       updatedAt: enrollment.updatedAt
     }));
@@ -212,3 +233,68 @@ module.exports.getMyEnrollments = async (req, res) => {
   }
 };
 
+// Get Total Revenue (for admin dashboard)
+module.exports.getTotalRevenue = async (req, res) => {
+  try {
+    // Get all successful enrollments
+    const enrollments = await Enrollment.find({ payment: "success" });
+
+    const totalRevenue = enrollments.reduce((sum, enrollment) => sum + enrollment.coursePrice, 0);
+    const adminTotal = enrollments.reduce((sum, enrollment) => sum + enrollment.adminCommission, 0);
+    const lecturerTotal = enrollments.reduce((sum, enrollment) => sum + enrollment.lecturerEarning, 0);
+
+    return res.status(200).json({
+      success: true,
+      revenue: {
+        totalRevenue,
+        adminCommission: adminTotal,
+        lecturerEarnings: lecturerTotal,
+        totalEnrollments: enrollments.length,
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching revenue:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch revenue"
+    });
+  }
+};
+
+// Get Lecturer Revenue (for lecturer dashboard)
+module.exports.getLecturerRevenue = async (req, res) => {
+  try {
+    const lecturerId = req.user.id;
+
+    // Get all successful enrollments for lecturer's courses
+    const enrollments = await Enrollment.find({ payment: "success" })
+      .populate({
+        path: 'courseId',
+        match: { createdBy: lecturerId }
+      });
+
+    // Filter enrollments where course belongs to this lecturer
+    const lecturerEnrollments = enrollments.filter(e => e.courseId !== null);
+
+    const totalEarning = lecturerEnrollments.reduce((sum, enrollment) => sum + enrollment.lecturerEarning, 0);
+
+    return res.status(200).json({
+      success: true,
+      revenue: {
+        totalEarning,
+        totalEnrollments: lecturerEnrollments.length,
+        breakdown: lecturerEnrollments.map(e => ({
+          course: e.courseId.title,
+          amount: e.lecturerEarning,
+          date: e.createdAt
+        }))
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching lecturer revenue:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch revenue"
+    });
+  }
+};

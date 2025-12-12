@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const paymentController = require("../Controllers/paymentController");
 const verifyToken = require("../middlewares/authMiddleware");
@@ -39,5 +39,20 @@ router.get(
   wrapAsync(paymentController.getMyEnrollments)
 );
 
-module.exports = router;
+// Lecturer routes - Get lecturer's earnings
+router.get(
+  "/lecturer-earnings",
+  verifyToken,
+  authorizeRole("lecture"),
+  wrapAsync(paymentController.getLecturerRevenue)
+);
 
+// Admin routes - Get total revenue
+router.get(
+  "/total-revenue",
+  verifyToken,
+  authorizeRole("admin"),
+  wrapAsync(paymentController.getTotalRevenue)
+);
+
+module.exports = router;
