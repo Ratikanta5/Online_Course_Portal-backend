@@ -74,7 +74,8 @@ module.exports.getVerifiedCourse = async (req, res) => {
           title: 1,
           description: 1,
           price: 1,
-          creator: { name: 1, email: 1, profileImage: 1, bio: 1 },
+          createdBy: 1,
+          creator: { _id: 1, name: 1, email: 1, profileImage: 1, bio: 1 },
           category: 1,
           courseImage: 1,
           topics: 1,
@@ -90,4 +91,3 @@ module.exports.getVerifiedCourse = async (req, res) => {
     return res.json({ success: false, message: error.message });
   }
 };
-

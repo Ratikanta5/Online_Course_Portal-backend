@@ -13,6 +13,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const progressRoutes = require('./routes/progressRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 // const studentRoutes = require('./routes/studentRoutes');
 
 connectDB();
@@ -32,6 +33,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/notifications", notificationRoutes);
 // app.use("/api/student", studentRoutes)
 
 

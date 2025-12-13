@@ -1,8 +1,10 @@
-const Stripe = require("stripe");
+﻿const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const Course = require("../models/Course");
 const Enrollment = require("../models/Enrollment");
 const ExpressError = require("../utills/ExpressError");
+const { Notification } = require("../models/Notification");
+const User = require("../models/User");
 
 // Create Payment Intent
 module.exports.createPaymentIntent = async (req, res) => {
@@ -13,7 +15,7 @@ module.exports.createPaymentIntent = async (req, res) => {
     console.log("Creating payment intent for student:", studentId, "Course:", courseId);
 
     // Validate course exists
-    const course = await Course.findById(courseId);
+    const course = await Course.findById(courseId).populate('createdBy', '_id name');
     if (!course) {
       throw new ExpressError(404, "Course not found");
     }
@@ -40,6 +42,7 @@ module.exports.createPaymentIntent = async (req, res) => {
       metadata: {
         studentId: studentId.toString(),
         courseId: courseId.toString(),
+        lecturerId: course.createdBy._id.toString(),
       },
     });
 
@@ -70,6 +73,7 @@ module.exports.createPaymentIntent = async (req, res) => {
       amount: course.price,
       courseName: course.title,
       courseImage: course.courseImage,
+      lecturerId: course.createdBy._id,
       breakdown: {
         totalPrice: course.price,
         adminCommission: adminCommission,
@@ -89,6 +93,7 @@ module.exports.createPaymentIntent = async (req, res) => {
 module.exports.confirmPayment = async (req, res) => {
   try {
     const { paymentIntentId, enrollmentId } = req.body;
+    const studentId = req.user.id;
 
     console.log("Confirming payment for intent:", paymentIntentId);
 
@@ -104,12 +109,94 @@ module.exports.confirmPayment = async (req, res) => {
       enrollmentId,
       { payment: "success" },
       { new: true }
-    )
-      .populate('courseId', 'title price')
-      .populate('userId', 'name email');
+    );
 
     if (!enrollment) {
       throw new ExpressError(404, "Enrollment not found");
+    }
+
+    // Get course with lecturer info
+    const course = await Course.findById(enrollment.courseId).populate('createdBy', '_id name email');
+    
+    // Get student info
+    const student = await User.findById(studentId).select('name email');
+
+    const lecturerId = course?.createdBy?._id;
+    const lecturerName = course?.createdBy?.name || 'Lecturer';
+    const studentName = student?.name || 'A student';
+    const courseName = course?.title || 'a course';
+    const coursePrice = enrollment.coursePrice;
+    const lecturerShare = Math.round(coursePrice * 0.8);
+    const adminCommission = Math.round(coursePrice * 0.2);
+
+    // ============ SEND NOTIFICATIONS SERVER-SIDE ============
+    
+    // 1. Notify the LECTURER about new enrollment
+    if (lecturerId) {
+      try {
+        await Notification.createNotification({
+          recipient: lecturerId,
+          type: 'new_enrollment',
+          title: ' New Student Enrolled!',
+          message: `${studentName} has enrolled in your course "${courseName}".`,
+          priority: 'medium',
+          data: { studentId, courseId: course._id, enrollmentId },
+          courseId: course._id,
+          senderId: studentId,
+        });
+        console.log("Notification sent to lecturer:", lecturerId);
+
+        // Notify lecturer about payment received
+        await Notification.createNotification({
+          recipient: lecturerId,
+          type: 'payment_received',
+          title: ' Payment Received',
+          message: `You earned ₹${lecturerShare} from ${studentName}'s enrollment in "${courseName}".`,
+          priority: 'high',
+          data: { studentId, courseId: course._id, amount: lecturerShare, enrollmentId },
+          courseId: course._id,
+          senderId: studentId,
+        });
+        console.log("Payment notification sent to lecturer:", lecturerId);
+      } catch (notifErr) {
+        console.error("Error sending lecturer notification:", notifErr);
+      }
+    }
+
+    // 2. Notify ALL ADMINS about new enrollment
+    try {
+      const admins = await User.find({ role: 'admin' }).select('_id');
+      for (const admin of admins) {
+        await Notification.createNotification({
+          recipient: admin._id,
+          type: 'new_enrollment',
+          title: ' New Course Enrollment',
+          message: `${studentName} enrolled in "${courseName}". Revenue: ₹${coursePrice} (Admin: ₹${adminCommission}, Lecturer: ₹${lecturerShare})`,
+          priority: 'medium',
+          data: { studentId, courseId: course._id, enrollmentId, totalRevenue: coursePrice, adminCommission },
+          courseId: course._id,
+          senderId: studentId,
+        });
+      }
+      console.log("Notification sent to", admins.length, "admin(s)");
+    } catch (notifErr) {
+      console.error("Error sending admin notification:", notifErr);
+    }
+
+    // 3. Notify the STUDENT about successful enrollment
+    try {
+      await Notification.createNotification({
+        recipient: studentId,
+        type: 'enrollment_success',
+        title: ' Enrollment Successful!',
+        message: `You have successfully enrolled in "${courseName}". Start learning now!`,
+        priority: 'high',
+        data: { courseId: course._id, enrollmentId },
+        courseId: course._id,
+      });
+      console.log("Enrollment success notification sent to student:", studentId);
+    } catch (notifErr) {
+      console.error("Error sending student notification:", notifErr);
     }
 
     console.log("Payment confirmed, enrollment updated:", enrollment._id);
@@ -117,7 +204,12 @@ module.exports.confirmPayment = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Payment successful! Enrollment confirmed.",
-      enrollment,
+      enrollment: {
+        ...enrollment.toObject(),
+        courseId: course,
+        userId: student,
+      },
+      lecturerId: lecturerId,
       revenue: {
         totalAmount: enrollment.coursePrice,
         adminEarned: enrollment.adminCommission,
